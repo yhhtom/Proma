@@ -870,7 +870,13 @@ export class AgentOrchestrator {
         }
       }
 
-      // 9.4.1 Fork resume: 使用源会话的 cwd，让 SDK 能找到源 session 文件
+      // 9.4.1 当存在已保存的 SDK session cwd 时，优先使用它（fork resume 后 SDK session 文件在源 cwd 下）
+      if (existingSdkSessionId && sessionMeta?.sdkSessionCwd) {
+        agentCwd = sessionMeta.sdkSessionCwd
+        console.log(`[Agent 编排] 使用已保存的 SDK session cwd: ${agentCwd}`)
+      }
+
+      // 9.4.2 Fork resume: 使用源会话的 cwd，让 SDK 能找到源 session 文件
       // fork 后 SDK 会创建新 session，后续 resume 使用新 sdkSessionId 在新 cwd 下工作
       if (isForkResume && forkSourceDir) {
         agentCwd = forkSourceDir
@@ -1143,11 +1149,11 @@ export class AgentOrchestrator {
           capturedSdkSessionId = sdkSessionId
           if (sdkSessionId !== existingSdkSessionId) {
             try {
-              updateAgentSessionMeta(sessionId, { sdkSessionId })
-              console.log(`[Agent 编排] 已保存 SDK session_id: ${sdkSessionId}`)
+              updateAgentSessionMeta(sessionId, { sdkSessionId, sdkSessionCwd: agentCwd })
+              console.log(`[Agent 编排] 已保存 SDK session_id: ${sdkSessionId}, cwd: ${agentCwd}`)
               // 验证保存是否成功
               const verifyMeta = getAgentSessionMeta(sessionId)
-              console.log(`[Agent 编排] 验证读回: sdkSessionId=${verifyMeta?.sdkSessionId || '空'}`)
+              console.log(`[Agent 编排] 验证读回: sdkSessionId=${verifyMeta?.sdkSessionId || '空'}, sdkSessionCwd=${verifyMeta?.sdkSessionCwd || '空'}`)
             } catch (err) {
               console.error(`[Agent 编排] 保存 SDK session_id 失败:`, err)
             }
@@ -1688,8 +1694,8 @@ export class AgentOrchestrator {
           const shouldClearSession = !apiError || apiError.statusCode >= 500
           if (existingSdkSessionId && shouldClearSession) {
             try {
-              updateAgentSessionMeta(sessionId, { sdkSessionId: undefined })
-              console.log(`[Agent 编排] 已清除失效的 sdkSessionId`)
+              updateAgentSessionMeta(sessionId, { sdkSessionId: undefined, sdkSessionCwd: undefined })
+              console.log(`[Agent 编排] 已清除失效的 sdkSessionId 及 sdkSessionCwd`)
             } catch { /* 忽略 */ }
           } else if (existingSdkSessionId && !shouldClearSession) {
             console.log(`[Agent 编排] 保留 sdkSessionId (API 错误 ${apiError?.statusCode})`)
